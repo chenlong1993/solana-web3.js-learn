@@ -10,15 +10,23 @@
   </div>
 </template>
 
-<script>
-import { createSolanaRpc } from '@solana/web3.js';
+<script lang="js">
+import {
+  createSolanaRpc,
+  createDefaultRpcTransport,
+  createSolanaRpcFromTransport} from '@solana/web3.js';
 
 export default {
   data() {
     return {
       rpcClients: [], // 用于存储多个RPC客户端
       currentRpcIndex: 0, // 当前使用的RPC客户端索引
-      slot: null
+      slot: null,
+      transportA: null,
+      transportB: null,
+      transportC: null,
+      transportD: null,
+      rpc: null
     };
   },
   methods: {
@@ -57,10 +65,59 @@ export default {
       } catch (error) {
         alert(`轮询获取slot信息时出错: ${error}`);
       }
-    }
+    },
+
+
+// 创建多个传输对象（用于sharding）
+    createTransports() {
+      this.transportA = createDefaultRpcTransport({url: 'https://mainnet-beta.my-server-1.com'});
+      this.transportB = createDefaultRpcTransport({url: 'https://mainnet-beta.my-server-2.com'});
+      this.transportC = createDefaultRpcTransport({url: 'https://mainnet-beta.my-server-3.com'});
+      this.transportD = createDefaultRpcTransport({url: 'https://mainnet-beta.my-server-4.com'});
+    },
+    // 根据请求方法选择分片（用于sharding）
+    selectShard(method) {
+      switch (method) {
+        case 'getAccountInfo':
+        case 'getBalance':
+          return this.transportA;
+        case 'getLatestBlockhash':
+        case 'getTransaction':
+          return this.transportB;
+        case 'sendTransaction':
+          return this.transportC;
+        default:
+          return this.transportD;
+      }
+    },
+    // 实现分片传输逻辑（用于sharding）
+    async shardingTransport(args) {
+      const payload = args[0].payload;
+      const method = payload.method;
+      const selectedTransport = this.selectShard(method);
+
+      return await selectedTransport.apply(null, args);
+    },
+    // 创建RPC客户端并执行sharding按钮点击操作
+    async shardingButtonClick() {
+      if (!this.transportA || !this.transportB || !this.transportC || !this.transportD) {
+        this.createTransports();
+      }
+      // 创建RPC客户端
+      this.rpc = createSolanaRpcFromTransport(this.shardingTransport);
+
+      try {
+        // 这里可以添加具体要执行的请求操作示例，比如获取账户信息
+        const accountInfo = await this.rpc.getAccountInfo('your_account_address').send();
+        alert(`获取到的账户信息为: ${accountInfo}`);
+      } catch (error) {
+        alert(`执行sharding操作时出错: ${error}`);
+      }
+    },
   },
   mounted() {
     this.initRpc();
+    this.createRpcClients();
   }
 };
 </script>
